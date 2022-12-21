@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
 //関数のプロトタイプを宣言
 void printClock(int size, int color, int isAMPM, int isSec, int isDetail,  int year, int month, int day, int week, int hour, int min, int sec);
-
+void *func(void *arg);
+int flag = 1; //グローバル変数
 /*注意点
 ・sizeを大きくしすぎると画面が乱れる.
 ・sizeを大きくするなら、実行前にコンソールサイズを小さくすること.
@@ -21,12 +23,12 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail,  int y
 ・[PM/AMを追加する(scanf)]
 ・[size2以上のとき、月/日/曜日を追加する(scanf)]
 ・[size2以上のとき、秒数を小さくするorなくす(scanf)]
-・最初に設定項目を追加する(scanf)
-・終了方法をかんがえておく
+・[終了方法をかんがえておく]
 ・[曜日が切り替わる時前の表示が残ってる→曜日の後に空白文字をいれればいけるかも？]
 ・[秒数表示を無効にする]
 ・[年月日曜を無効にする]
 ・[秒数設定を無効化した時、コロンを点滅させる
+・
 ex.
     変更したい項目の番号を入力してください.
     実行する場合は0を入力してください. //それ以外の数は終了
@@ -51,14 +53,16 @@ int main(int argc, const char * argv[]) {
     struct tm tm;
     localtime_r(&t, &tm);
 
+    printf("<<CustomClock>>\n");
     //size設定
-    printf("サイズ(倍数)を自然数で入力してください(10倍まで): ");
+    printf("サイズ倍率設定(10倍まで)\n");
+    printf(": ");
     scanf("%d", &size);
-    printf("size * %d\n",size);
+    
     if (!(size > 1 || size < 10)) return 0; //実行不可処理 errorMessage()?
 
     //color設定
-    printf("サイズを入力してください\n");
+    printf("サイズ設定\n");
     printf("0:白, 1:赤, 2:緑, 3:黄\033[33m, 4:紫, 5:ピンク, 6:水色\n");
     printf(": ");
     scanf("%d", &color);
@@ -89,11 +93,17 @@ int main(int argc, const char * argv[]) {
     if (size != 1 && isDetail == 1) {
         goUp += 6;//曜日分も底上げ
     } 
+    printf("enter/returnキーで終了します\n");
+
+    //スレッド作成
+    pthread_t th[1];
+    pthread_create(&th[0], NULL, func, NULL);
+    
 
     //本体
-    //sleepをscanf(gamingcolor fast slow)で得た値で、0.2とか0.25とかにする→ゲーミング
-    while (1) {
-        sleep(1);//調整のためにいじるかも
+    
+    while (flag) {
+        usleep(1.0 * 1000000);//(1.0s)
         printf("\033[2K");//全体削除
         time_t t = time(NULL);
         localtime_r(&t, &tm);
@@ -103,8 +113,11 @@ int main(int argc, const char * argv[]) {
             tm.tm_hour, tm.tm_min, tm.tm_sec//時分秒
         );
         printf("\033[%dF", goUp);//カーソルを5*size+6行上に移動
-        
     }
+    printf("\033[1F");
+    printf("\033[2K");//全体削除
+    printf("CustomClockを終了します\n");
+    
     return 0;
 }
 
@@ -113,12 +126,17 @@ int main(int argc, const char * argv[]) {
 
 //関数////////////////////////////////////////////////////////////////////////////////////////
 
-//error関数
+/*func関数*/
+//flag管理用マルチスレッド
+void *func(void *arg) {
+    getchar(); //1度だけだと本体が起動した瞬間終了してしまう
+    getchar(); 
+    flag = 0;
+    return NULL;
+}
 
-//{2022/7/14/THU}
-//
-
-//引数に数字を入力するとでかくなって出力される。
+/*printClock関数*/
+//設定内容と現在時刻を投げると時計を表示する
 void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int year, int month, int day, int week, int hour, int min, int sec) {
     //0:無効(空白文字), 1:AM, 2:PM
     int AMorPM = 0;
@@ -439,7 +457,7 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int ye
                     //size(横幅5*size)
                     for (int m = 0; m < size; m++) {
                         if (bigList[HMSdata[k]][i][l] == 1) {
-                            printf("■\033[3%dm", color);
+                            printf("\033[3%dm■", color);
                         } else if (bigList[HMSdata[k]][i][l] == 0) {
                             putchar(' ');
                         }

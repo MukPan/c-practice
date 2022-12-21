@@ -1,10 +1,20 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
-//関数のプロトタイプを宣言
-void printClock(int size, int color, int isAMPM, int isSec, int isDetail,  int year, int month, int day, int week, int hour, int min, int sec);
-
+#include <pthread.h>
+//////////関数のプロトタイプを宣言//////////
+void printClock(int size, int firstColor, int secondColor, int isAMPM, int isSec, int isDetail, int year, int month, int day, int week, int hour, int min, int sec);
+void *func(void *arg);
+int errorCheck(int value, int min, int max);
+//グローバル変数
+int flag = 1; 
+int beforeSec = -1;
 /*注意点
+
+実行方法
+こだわった点
+参考にした記事
+
 ・sizeを大きくしすぎると画面が乱れる.
 ・sizeを大きくするなら、実行前にコンソールサイズを小さくすること.
 ・sizeは自然数をにゅうりょくしてください.
@@ -21,113 +31,157 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail,  int y
 ・[PM/AMを追加する(scanf)]
 ・[size2以上のとき、月/日/曜日を追加する(scanf)]
 ・[size2以上のとき、秒数を小さくするorなくす(scanf)]
-・最初に設定項目を追加する(scanf)
-・終了方法をかんがえておく
+・[終了方法をかんがえておく]
 ・[曜日が切り替わる時前の表示が残ってる→曜日の後に空白文字をいれればいけるかも？]
 ・[秒数表示を無効にする]
 ・[年月日曜を無効にする]
-・[秒数設定を無効化した時、コロンを点滅させる
-ex.
-    変更したい項目の番号を入力してください.
-    実行する場合は0を入力してください. //それ以外の数は終了
-    0.実行
-    1.サイズの変更:*1
-    ２.月/日/曜日の表示：有効
-    3.秒数の表示:小  //有効/有効(小)/メトロノーム/無効
-    入力: 
-//size=1に設定された時、秒数以外の以下の項目をすべて無効に
-//size=1のとき他の設定の番号を入力しようとすると、警告文と共にループする
-
+・[秒数設定を無効化した時、コロンを点滅させる]
 */
-//main関数
+
+//////////main関数//////////
 int main(int argc, const char * argv[]) {
     int size = 1;
-    int color = 0;
+    int firstColor = 0;
+    int secondColor = 0;
     int goUp = 0;
+    int renewSpeed = 1.0 * 1000000; //初期設定1秒
     int isAMPM = 0; //0:無効, 1:有効
     int isSec = 0; //0:無効, 1:有効
     int isDetail = 0; //0:無効, 1:有効
+    int isColonSwitch = 0; //0:無効, 1:有効
     time_t t = time(NULL);
     struct tm tm;
     localtime_r(&t, &tm);
 
-    //size設定
-    printf("サイズ(倍数)を自然数で入力してください(10倍まで): ");
-    scanf("%d", &size);
-    printf("size * %d\n",size);
-    if (!(size > 1 || size < 10)) return 0; //実行不可処理 errorMessage()?
+    //タイトル
+    printf("\033[1m<<CustomClock>>\n\033[0m");
 
-    //color設定
-    printf("サイズを入力してください\n");
-    printf("0:白, 1:赤, 2:緑, 3:黄\033[33m, 4:紫, 5:ピンク, 6:水色\n");
-    printf(": ");
-    scanf("%d", &color);
-    if (color == 0) {
-        color = 7;  //\033[37m (37は白)
+    //size設定
+    printf("サイズ倍率設定(1-10倍)\n: ");
+    scanf("%d", &size);
+    if (errorCheck(size, 1, 10)) return 0;
+
+    //年月日曜表示設定(size1のとき無視)
+    if (size != 1) {
+        printf("年月日曜表示設定\n");
+        printf("(1〜3倍推奨)\n");
+        printf("0/無効, 1/有効\n: ");
+        scanf("%d", &isDetail);
+        if (errorCheck(isDetail, 0, 1)) return 0;
+    }
+
+    //firstColor設定
+    printf("時分秒カラー設定\n");
+    printf("0/白, \033[31m1/赤, \033[32m2/緑, \033[33m3/黄, \033[34m4/紫, \033[35m5/ピンク, \033[36m6/水色\n\033[39m: ");
+    scanf("%d", &firstColor);
+    if (errorCheck(firstColor, 0, 6)) return 0;
+    if (firstColor == 0) firstColor = 9;  //\033[39m (39は白(デフォルト))
+
+    //secondColor設定(size1のとき無視)
+    if (size != 1) {
+        printf("年月日曜カラー設定\n");
+        printf("0/白, \033[31m1/赤, \033[32m2/緑, \033[33m3/黄, \033[34m4/紫, \033[35m5/ピンク, \033[36m6/水色\n\033[39m: ");
+        scanf("%d", &secondColor);
+        if (errorCheck(secondColor, 0, 6)) return 0;
+        if (secondColor == 0) secondColor = 9;  //\033[39m (39は白(デフォルト))
     }
 
     //AMPM設定
-    printf("AMPM設定\n");
-    printf("0/無効, 1/有効\n");
-    printf(": ");
+    printf("AMPM表示設定\n");
+    printf("0/無効, 1/有効\n: ");
     scanf("%d", &isAMPM);
+    if (errorCheck(isAMPM, 0, 1)) return 0;
+    
 
     //秒数表示設定
-    printf("sec表示設定\n");
-    printf("0/無効, 1/有効\n");
-    printf(": ");
+    printf("秒数表示設定\n");
+    printf("0/無効, 1/有効\n: ");
     scanf("%d", &isSec);
-    
-    //年月日曜表示設定
-    printf("年月日曜表示設定\n");
-    printf("0/無効, 1/有効\n");
-    printf(": ");
-    scanf("%d", &isDetail);
+    if (errorCheck(isSec, 0, 1)) return 0;
 
-    //設定反映
+    //一部設定反映
     goUp = size * 5;
     if (size != 1 && isDetail == 1) {
         goUp += 6;//曜日分も底上げ
-    } 
+    }
 
+    if (isSec == 0) {
+        renewSpeed /= 2; //コンマ点滅用(0.5秒)
+    }
+
+    /////本体/////
+    printf("enter/returnキーで終了します.\n");
+    //スレッド作成
+    pthread_t th[1];
+    pthread_create(&th[0], NULL, func, NULL);
     //本体
-    //sleepをscanf(gamingcolor fast slow)で得た値で、0.2とか0.25とかにする→ゲーミング
-    while (1) {
-        sleep(1);//調整のためにいじるかも
-        printf("\033[2K");//全体削除
+    while (flag) {
+        usleep(renewSpeed);//(0.50s or 1.0s)
         time_t t = time(NULL);
         localtime_r(&t, &tm);
         printClock(
-            size, color, isAMPM, isSec, isDetail,//各種設定
+            size, firstColor, secondColor, isAMPM, isSec, isDetail,//各種設定
             tm.tm_year+1900, tm.tm_mon+1 ,tm.tm_mday, tm.tm_wday,//年月日曜
             tm.tm_hour, tm.tm_min, tm.tm_sec//時分秒
         );
         printf("\033[%dF", goUp);//カーソルを5*size+6行上に移動
-        
+        printf("\033[2K");//全体削除
     }
+    printf("\033[1F");//カーソルを先頭
+    printf("\033[2K");//全体削除
+    printf("\033[39mCustomClockを終了します\n");
+    printf("\033[1m<<CustomClock>>\n\033[0m");
     return 0;
 }
 
 
 
 
-//関数////////////////////////////////////////////////////////////////////////////////////////
+//////////関数//////////
+/*errorCheck関数*/
+//入力可能範囲と入力された値を与え、問題があるとプログラムを終了する
+int errorCheck(int value, int min, int max) {
+    if (value >= min && value <= max) {
+        return 0;
+    } else {
+        printf("不正な値が入力されました.\nプログラムを終了します.\n");
+        printf("\033[1m<<CustomClock>>\n\033[0m");
+        return 1;
+    }
+}
 
-//error関数
 
-//{2022/7/14/THU}
-//
+/*func関数*/
+//flag管理用マルチスレッド、本体起動時にreturnキーを押すと終了する
+void *func(void *arg) {
+    getchar(); //1度だけだと本体が起動した瞬間終了してしまう
+    getchar(); 
+    flag = 0;
+    return NULL;
+}
 
-//引数に数字を入力するとでかくなって出力される。
-void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int year, int month, int day, int week, int hour, int min, int sec) {
-    //0:無効(空白文字), 1:AM, 2:PM
+
+/*printClock関数*/
+//設定内容と現在時刻を与えると時計を表示する
+void printClock(int size, int firstColor, int secondColor, int isAMPM, int isSec, int isDetail, int year, int month, int day, int week, int hour, int min, int sec) {
+    //0:無効, 1:AM, 2:PM
     int AMorPM = 0;
-    //AMPMdata[AMorPM][0-1]
+    //デフォルトでコロン表示
+    int colonSwitch = 10;
+    //AMPMdata[AMorPM][0-3]
     int AMPMdata[3][4] = {
         {29, 29, 29, 29},
         {12, 11, 18, 28},
         {21, 11, 18, 28},
-        }; 
+        };
+
+    //秒数非表示のとき、コロンを非表示(28)、表示(10)を交互に繰り返し点滅させる
+    if (isSec == 0) {
+        if (beforeSec == sec) {
+            colonSwitch = 28; //消す
+        }
+        beforeSec = sec;
+    }
 
     //secData[isSec0-1][0-4]
     int secData[2][5] = {{29, 29, 29, 29, 29}, {10, 11, sec/10, 11, sec%10}};
@@ -150,7 +204,7 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int ye
     //[10]コロン, [11]空白, [28]空白文字, [29]詰文字
     int HMSdata[19] = {
         AMPMdata[AMorPM][0], AMPMdata[AMorPM][1], AMPMdata[AMorPM][2] ,AMPMdata[AMorPM][3],//{A M[]}
-        hour/10, 11, hour%10, 11, 10, 11,//{1 2 : }
+        hour/10, 11, hour%10, 11, colonSwitch, 11,//{1 2 : }
         min/10, 11, min%10, 11, secData[isSec][0], secData[isSec][1],//{3 4 : }
         secData[isSec][2], secData[isSec][3], secData[isSec][4],//{5 6}
     };
@@ -423,10 +477,7 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int ye
         },
     };
 
-
-    
-
-    //下のforを改行した後2回実行?
+/////出力部分/////
 
     //出力[size(時分秒)]
     for (int i = 0; i < 5; i++) {
@@ -439,7 +490,7 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int ye
                     //size(横幅5*size)
                     for (int m = 0; m < size; m++) {
                         if (bigList[HMSdata[k]][i][l] == 1) {
-                            printf("■\033[3%dm", color);
+                            printf("\033[3%dm■", firstColor);
                         } else if (bigList[HMSdata[k]][i][l] == 0) {
                             putchar(' ');
                         }
@@ -449,8 +500,6 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int ye
             putchar('\n');
         }
     }
-    
-    
 
     if (size != 1 && isDetail == 1) {
         putchar('\n');//1行空ける
@@ -461,7 +510,7 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int ye
                 //1文字分の行を構成
                 for (int k = 0; k < 5; k++) {
                     if (bigList[YMDWdata[j]][i][k] == 1) {
-                        printf("\033[3%dm■", color);
+                        printf("\033[3%dm■", secondColor);
                     } else if (bigList[YMDWdata[j]][i][k] == 0) {
                         putchar(' ');
                     }
@@ -471,4 +520,3 @@ void printClock(int size, int color, int isAMPM, int isSec, int isDetail, int ye
         }
     }
 }
-

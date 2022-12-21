@@ -24,7 +24,9 @@ void printClock(int size, int color, int isAMPM, int isSec, int year, int month,
 ・最初に設定項目を追加する(scanf)
 ・終了方法をかんがえておく
 ・[曜日が切り替わる時前の表示が残ってる→曜日の後に空白文字をいれればいけるかも？]
-・[秒数表示を無効にする
+・[秒数表示を無効にする]
+・[年月日曜を無効にする]
+・[コロンを点滅させる //更新speed変数の追加
 ex.
     変更したい項目の番号を入力してください.
     実行する場合は0を入力してください. //それ以外の数は終了
@@ -44,6 +46,7 @@ int main(int argc, const char * argv[]) {
     int goUp = 0;
     int isAMPM = 0; //0:無効, 1:有効
     int isSec = 0; //0:無効, 1:有効
+    int speed = 1;
     time_t t = time(NULL);
     struct tm tm;
     localtime_r(&t, &tm);
@@ -79,10 +82,10 @@ int main(int argc, const char * argv[]) {
     scanf("%d", &isSec);
     
 
-    //本体
+    //本体/////////////////////////////////////////////////////////////
     //sleepをscanf(gamingcolor fast slow)で得た値で、0.2とか0.25とかにする→ゲーミング
     while (1) {
-        sleep(1);//調整のためにいじるかも
+        sleep(speed);//調整のためにいじるかも
         printf("\033[2K");//全体削除
         time_t t = time(NULL);
         localtime_r(&t, &tm);
@@ -91,7 +94,7 @@ int main(int argc, const char * argv[]) {
             tm.tm_year+1900, tm.tm_mon+1 ,tm.tm_mday, tm.tm_wday,//年月日曜
             tm.tm_hour, tm.tm_min, tm.tm_sec//時分秒
         );
-        printf("\033[%dF", goUp);//カーソルを5*size+6行上に移動
+        printf("\033[%dF", goUp);//カーソルをgoUp行上に移動
         
     }
     return 0;
@@ -118,6 +121,9 @@ void printClock(int size, int color, int isAMPM, int isSec, int year, int month,
         {21, 11, 18, 28},
         }; 
 
+    //secData[isSec0-1][0-4]
+    int secData[2][5] = {{29, 29, 29, 29, 29}, {10, 11, sec/10, 11, sec%10}};
+
     //AMPMが有効なら実行 //関数化できるならやって int getAMPMhour(int hour);
     if (isAMPM == 1) {
         if (hour < 12) {
@@ -137,8 +143,8 @@ void printClock(int size, int color, int isAMPM, int isSec, int year, int month,
     int HMSdata[19] = {
         AMPMdata[AMorPM][0], AMPMdata[AMorPM][1], AMPMdata[AMorPM][2] ,AMPMdata[AMorPM][3],//{A M[]}
         hour/10, 11, hour%10, 11, 10, 11,//{1 2 : }
-        min/10, 11, min%10, 11, 10, 11,//{3 4 : }
-        sec/10, 11, sec%10,//{5 6}
+        min/10, 11, min%10, 11, secData[isSec][0], secData[isSec][1],//{3 4 : }
+        secData[isSec][2], secData[isSec][3], secData[isSec][4],//{5 6}
     };
     //secData
     
